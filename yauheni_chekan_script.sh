@@ -44,21 +44,21 @@ sed -i 's/enabled=0/enabled=1/g' /etc/yum.repos.d/CentOS-Media.repo
 yum clean all &> /dev/null
 
 # Partition new disks as Linux LVM
-echo Starting $1 disk partition... | tee -a $LOG_FILE
-(echo n; echo p; echo 1; echo ; echo ; echo t; echo 8e; echo w) | fdisk /dev/$1 2>> $LOG_FILE > /dev/null && echo success...
-echo Starting $2 disk partition... | tee -a $LOG_FILE 
-(echo n; echo p; echo 1; echo ; echo ; echo t; echo 8e; echo w) | fdisk /dev/$2 2>> $LOG_FILE > /dev/null && echo success...
-echo Starting $3 disk partition... | tee -a $LOG_FILE
-(echo n; echo p; echo 1; echo ; echo ; echo t; echo 8e; echo w) | fdisk /dev/$3 2>> $LOG_FILE > /dev/null && echo success...
+echo Starting $disk_1 disk partition... | tee -a $LOG_FILE
+(echo n; echo p; echo 1; echo ; echo ; echo t; echo 8e; echo w) | fdisk /dev/$disk_1 2>> $LOG_FILE > /dev/null && echo success...
+echo Starting $disk_2 disk partition... | tee -a $LOG_FILE 
+(echo n; echo p; echo 1; echo ; echo ; echo t; echo 8e; echo w) | fdisk /dev/$disk_2 2>> $LOG_FILE > /dev/null && echo success...
+echo Starting $disk_3 disk partition... | tee -a $LOG_FILE
+(echo n; echo p; echo 1; echo ; echo ; echo t; echo 8e; echo w) | fdisk /dev/$disk_3 2>> $LOG_FILE > /dev/null && echo success...
 
 # Inform the OS of partition table changes
 partprobe && echo Partition table changed successfully... | tee -a $LOG_FILE
 
 # Initialize physical volumes for use by LVM
-pvcreate /dev/sd[${1}${2}${3}]1 || echo Physical volume creating FAIL... | tee -a $LOG_FILE
+pvcreate /dev/sd[${disk_1}${disk_2}${disk_3}]1 || echo Physical volume creating FAIL... | tee -a $LOG_FILE
 
 # Create a volume group (my_vg - group name)
-vgcreate my_vg /dev/${1}1 /dev/${2}1 /dev/${3}1 | tee -a $LOG_FILE
+vgcreate my_vg /dev/${disk_1}1 /dev/${disk_2}1 /dev/${disk_3}1 | tee -a $LOG_FILE
 
 # Create logical volume of raid5 type.
 lvcreate -n my_array --type raid5 -l 100%FREE -i 2 my_vg | tee -a $LOG_FILE
@@ -67,13 +67,13 @@ lvcreate -n my_array --type raid5 -l 100%FREE -i 2 my_vg | tee -a $LOG_FILE
 mkfs -t xfs /dev/my_vg/my_array && echo XFS filesystem successfully created for logical volume... | tee -a $LOG_FILE
 
 # Add new info to /etc/fstab
-echo /dev/my_vg/my_array $4 xfs defaults 0 0 >> /etc/fstab
+echo /dev/my_vg/my_array $mount_point xfs defaults 0 0 >> /etc/fstab
 
 # Make new directory for mounting «my_array»lv
-mkdir $4
+mkdir $mount_point
 
 # Mount lv into a newly created directory
-mount -t xfs /dev/my_vg/my_array $4
+mount -t xfs /dev/my_vg/my_array $mount_point
 
 echo "	RAID5 array created successfully...
 	Logical volume mounted successfully..." | tee -a $LOG_FILE
@@ -89,7 +89,7 @@ systemctl enable rpcbind nfs-server
 systemctl start rpcbind nfs-server
 
 # Adding "my_array" share directory to exports file
-echo "$4 192.168.56.1/24(rw,sync,no_root_squash,no_all_squash)" >> /etc/exports
+echo "$mount_point 192.168.56.1/24(rw,sync,no_root_squash,no_all_squash)" >> /etc/exports
 exportfs -r
 
 # Adding firewall configurations
@@ -103,16 +103,16 @@ firewall-cmd --reload
 mkdir /mnt/nfs_shared_my_array || echo Directory for file sharing creation FAILED... | tee -a $LOG_FILE
 
 # Mounting directory for share on the server to local sharing directory on the client
-mount -t nfs 192.168.56.107:$4 /mnt/nfs_shared_my_array/
+mount -t nfs 192.168.56.107:$mount_point /mnt/nfs_shared_my_array/
 
 # Enabling auto-mounting after system reboot on the client side
-echo 192.168.56.107:$4 /mnt/nfs_shared_my_array/ nfs defaults 0 0 >> /etc/fstab
+echo 192.168.56.107:$mount_point /mnt/nfs_shared_my_array/ nfs defaults 0 0 >> /etc/fstab
 echo '==============================================='
 
 if [[ $? == 0 ]]; then
 echo "	SYSTEM CONFIGURATION COMPLETED SUCCESSFULLY
 	LOGICAL VOLUME: /dev/my_vg/my_array/
-	SHARING DIRECTORY: $4
+	SHARING DIRECTORY: $mount_point
 	`date` " | tee -a $LOG_FILE
 exit 0
 fi
