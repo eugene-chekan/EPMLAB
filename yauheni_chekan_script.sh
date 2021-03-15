@@ -9,10 +9,23 @@ LOG_FILE=/var/log/yauheni_chekan_script.log
 
 # Test for right parameters number
 if [[ $# != 4 ]]; then
-echo 'Script takes exactly 4 parameters [DISK1] [DISK2] [DISK3] [MOUNT_POINT]' >&2
-exit 1
+	echo 'Script takes exactly 4 parameters [DISK1] [DISK2] [DISK3] [MOUNT_POINT]' >&2
+	exit 1
 fi
 
+# Test for disks availability
+if [[ ! -b /dev/$disk_1 ]]; then
+	echo $disk_1 is not a block device. >&2
+	exit 1
+elif [[ ! -b /dev/$disk_2 ]]; then
+	echo $disk_2 is not a block device. >&2
+	exit 1
+elif [[ ! -b /dev/$disk_3 ]]; then
+	echo $disk_3 is not a block device. >&2
+	exit 1
+fi
+
+ 
 echo "	SYSTEM CONFIGURATION START
 	`date`" | tee -a $LOG_FILE 
 echo '==============================================='
@@ -29,7 +42,7 @@ iptables -A INPUT -p tcp --dport 22 -j ACCEPT && echo SSH configuration successf
 
 # Mount DVD iso to mounting point
 echo Mounting DVD iso into /media/CentOS... | tee -a $LOG_FILE 
-mkdir /media/CentOS
+mkdir /media/CentOS 2> /dev/null || echo The directory already exists! | tee -a $LOG_FILE
 mount -o loop,ro /ISO/CentOS-7-x86_64-DVD-2009.iso /media/CentOS
 
 # Disable all repos
@@ -70,7 +83,7 @@ mkfs -t xfs /dev/my_vg/my_array && echo XFS filesystem successfully created for 
 echo /dev/my_vg/my_array $mount_point xfs defaults 0 0 >> /etc/fstab
 
 # Make new directory for mounting «my_array»lv
-mkdir $mount_point
+mkdir $mount_point 2> /dev/null || echo The directory already exists! | tee -a $LOG_FILE
 
 # Mount lv into a newly created directory
 mount -t xfs /dev/my_vg/my_array $mount_point
@@ -100,7 +113,7 @@ firewall-cmd --permanent --zone=public --add-service=rpc-bind
 firewall-cmd --reload
 
 # Create directory for mounting shared dirs. Normally made on the client side
-mkdir /mnt/nfs_shared_my_array || echo Directory for file sharing creation FAILED... | tee -a $LOG_FILE
+mkdir /mnt/nfs_shared_my_array 2> /dev/null || echo The directory already exists! | tee -a $LOG_FILE
 
 # Mounting directory for share on the server to local sharing directory on the client
 mount -t nfs 192.168.56.107:$mount_point /mnt/nfs_shared_my_array/
